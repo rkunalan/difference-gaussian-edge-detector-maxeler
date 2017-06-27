@@ -1,0 +1,70 @@
+/**
+ * MaxFile name: MovingAverageSimple
+ * Using "Difference of Gaussian Edge Detector Algorithm" to an image to find the 
+ * difference of gaussian edge detection of that image
+ * The input of the image is loaded and send it through DFE as a color image(cake.ppm)
+ * and get the output of the image(final_cake.ppm) as a black and white.
+ */
+package movingaveragesimple;
+
+import com.maxeler.maxcompiler.v2.kernelcompiler.Kernel;
+import com.maxeler.maxcompiler.v2.kernelcompiler.KernelParameters;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.base.DFEVar;
+
+class MovingAverageSimpleKernel extends Kernel {
+
+	MovingAverageSimpleKernel(KernelParameters parameters) {
+		super(parameters);
+        
+        int width = 720;
+ 		int height = 540;
+
+		DFEVar input_image = io.input("input_image", dfeInt(32));
+		
+		DFEVar sliding_window[][] = new DFEVar[3][3];
+
+		for (int x = -1; x <= 1; x++){
+			for (int y = -1; y <= 1; y++){
+				sliding_window[x + 1][y + 1] = stream.offset(input_image, y * width + x);
+			}
+		}
+		
+        /* 		1 2 3            Output of gaussian difference edge detector A is:
+            A = 4 5 6    ===>>          max of {
+                7 8 9                          | 1 - 9 | | 7 - 3 |
+                                         | 4 - 6 | | 2 - 8 |
+                                        } 
+                                        = 8
+        */
+        
+		// Based on the above calculation four steps to find the values of edge detector
+		// Here the edge detector is use blue color to differnciate
+		// step 1 (|A[0][0] - A[2][2]|)
+		DFEVar step1_val = (sliding_window[0][0] & 0xFF) - (sliding_window[2][2] & 0xFF);
+		DFEVar abs_step1_val = step1_val >= 0 ? step1_val : -step1_val;
+		
+		// step 2 (|A[2][0] - A[0][2]|)
+		DFEVar step2_val = (sliding_window[2][0] & 0xFF) - (sliding_window[0][2] & 0xFF);
+		DFEVar abs_step2_val = step2_val >= 0 ? step2_val : -step2_val;
+	    
+	    // step 3 (|A[1][0] - A[1][2]|)
+		DFEVar step3_val = (sliding_window[1][0] & 0xFF) - (sliding_window[1][2] & 0xFF);
+		DFEVar abs_step3_val = step3_val >= 0 ? step3_val : -step3_val;
+        
+        // step 4 (|A[0][1] - A[2][1]|)
+		DFEVar step4_val = (sliding_window[0][1] & 0xFF) - (sliding_window[2][1] & 0xFF);
+		DFEVar abs_step4_val = step4_val >= 0 ? step4_val : -step4_val;
+		
+        // find the maximum value
+	    DFEVar max_step1_step2_val = (abs_step1_val > abs_step2_val) ? abs_step1_val : abs_step2_val;
+	    DFEVar max_step3_step4_val = (abs_step3_val > abs_step4_val) ? abs_step3_val : abs_step4_val;
+		DFEVar result = (max_step1_step2_val > max_step3_step4_val) ? max_step1_step2_val : max_step3_step4_val;
+		
+		// final image in black and white
+		DFEVar final_result = (result << 0) | (result << 8) | (result << 16)| (result & 0xFF) ;
+		
+		io.output("output_image", final_result, final_result.getType());
+		
+	}
+}
+
